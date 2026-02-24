@@ -11,7 +11,7 @@ import { ProductStatus } from '../types';
 import { JEWELLERY_TYPES } from '../constants';
 
 export const Allotment: React.FC = () => {
-  const { products, customers, bulkAllotProducts, verifyAllotment, currentUser, getPurityFactor, logAction } = useAppStore();
+  const { products, customers, bulkAllotProducts, verifyAllotment, currentUser, getPurityFactor, logAction, addNotification } = useAppStore();
   
   const [showPendingVerify, setShowPendingVerify] = useState(false);
   
@@ -177,7 +177,9 @@ export const Allotment: React.FC = () => {
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
-    window.html2pdf().set(opt).from(element).save();
+    window.html2pdf().set(opt).from(element).save().then(() => {
+        addNotification('PDF Exported', 'Allotment manifest downloaded successfully.', 'success');
+    });
   };
 
   // --- RENDER: MAIN INTERFACE ---

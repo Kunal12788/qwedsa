@@ -237,7 +237,7 @@ const InvoiceTemplate: React.FC<{ bills: BillingRecord[] | null; customer: Custo
 };
 
 export const Billing: React.FC = () => {
-  const { products, customers, createBill, settings, billingRecords, settleBillPayment, toggleBillGold, getPurityFactor } = useAppStore();
+  const { products, customers, createBill, settings, billingRecords, settleBillPayment, toggleBillGold, getPurityFactor, addNotification } = useAppStore();
   
   // --- States for Split Billing Workflow ---
   const [selectedCustomerGroup, setSelectedCustomerGroup] = useState<{ customer: Customer, items: Product[] } | null>(null);
@@ -415,6 +415,7 @@ export const Billing: React.FC = () => {
 
     window.html2pdf().set(opt).from(element).save().then(() => {
        setExportingBills(null);
+       addNotification('Invoices Exported', 'Billing invoices downloaded successfully.', 'success');
     });
   };
 
@@ -433,7 +434,9 @@ export const Billing: React.FC = () => {
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
-    window.html2pdf().set(opt).from(element).save();
+    window.html2pdf().set(opt).from(element).save().then(() => {
+      addNotification('Ledger Exported', 'Transaction ledger downloaded successfully.', 'success');
+    });
   };
 
   useEffect(() => {

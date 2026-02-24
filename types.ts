@@ -143,3 +143,12 @@ export interface GlobalSettings {
   goldRatePer10Gm: number;
   isWorkingHoursActive: boolean; // New Field
 }
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  timestamp: string;
+  read: boolean;
+}

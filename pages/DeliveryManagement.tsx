@@ -88,7 +88,7 @@ const ShippingLabelTemplate: React.FC<{ pkg: DeliveryPackage | null; customer: C
 };
 
 export const DeliveryManagement: React.FC = () => {
-  const { billingRecords, products, customers, dispatchPackage, deliverPackage, deliveryPackages } = useAppStore();
+  const { billingRecords, products, customers, dispatchPackage, deliverPackage, deliveryPackages, addNotification } = useAppStore();
   const [activeTab, setActiveTab] = useState<'DISPATCH' | 'TRANSIT' | 'HISTORY'>('DISPATCH');
 
   // --- Dispatch State ---
@@ -194,7 +194,9 @@ export const DeliveryManagement: React.FC = () => {
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
-    window.html2pdf().set(opt).from(element).save();
+    window.html2pdf().set(opt).from(element).save().then(() => {
+      addNotification('Delivery Report Exported', 'Delivery logistics report downloaded.', 'success');
+    });
   };
 
   // Helper

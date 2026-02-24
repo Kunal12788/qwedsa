@@ -16,6 +16,7 @@ import { SecurityCenter } from './pages/SecurityCenter'; // New Import
 import { UserRole } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Gem, ShieldCheck, Activity, Globe, Server, Lock } from 'lucide-react';
+import { NotificationSystem } from './components/NotificationSystem';
 
 const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   useEffect(() => {
@@ -186,6 +187,7 @@ const AppContent: React.FC = () => {
 
   return (
     <>
+      <NotificationSystem />
       <AnimatePresence mode="wait">
         {showSplash ? (
           <SplashScreen key="splash" onComplete={() => setShowSplash(false)} />

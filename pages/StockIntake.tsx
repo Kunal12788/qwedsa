@@ -63,7 +63,7 @@ interface BatchRow {
 }
 
 export const StockIntake: React.FC = () => {
-  const { products, addProduct, getPurityFactor, logAction, currentUser } = useAppStore();
+  const { products, addProduct, getPurityFactor, logAction, currentUser, addNotification } = useAppStore();
   
   // Workflow State: Start directly at 'BATCH'
   const [step, setStep] = useState<'BATCH' | 'SUMMARY'>('BATCH');
@@ -124,6 +124,7 @@ export const StockIntake: React.FC = () => {
         setTimeout(() => {
            window.html2pdf().set(opt).from(element).save().then(() => {
              setExportingBatch(null); // Reset after export
+             addNotification('Batch Report Exported', `Report for Batch ${exportingBatch.batchId} downloaded.`, 'success');
            });
         }, 500);
       }
@@ -392,7 +393,9 @@ export const StockIntake: React.FC = () => {
       html2canvas: { scale: 2 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
     };
-    window.html2pdf().set(opt).from(element).save();
+    window.html2pdf().set(opt).from(element).save().then(() => {
+        addNotification('Stock Intake Exported', `Stock intake report for ${currentBatchId} downloaded.`, 'success');
+    });
   };
 
   return (

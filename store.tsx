@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Product, Customer, AuditLog, BillingRecord, GlobalSettings, UserRole, ProductStatus, DeliveryPackage } from './types';
+import { User, Product, Customer, AuditLog, BillingRecord, GlobalSettings, UserRole, ProductStatus, DeliveryPackage, AppNotification } from './types';
 import { MOCK_USERS, MOCK_CUSTOMERS, INITIAL_PRODUCTS } from './constants';
 
 interface AppState {
@@ -11,6 +11,7 @@ interface AppState {
   billingRecords: BillingRecord[];
   deliveryPackages: DeliveryPackage[];
   settings: GlobalSettings;
+  notifications: AppNotification[];
 }
 
 interface CustomerRegistrationData {
@@ -52,6 +53,9 @@ interface AppContextType extends AppState {
   recordUnauthorizedAttempt: (email: string, deviceInfo: string) => void; // New Security Action
   // Utilities
   getPurityFactor: (purity: string) => number;
+  // Notifications
+  addNotification: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
+  removeNotification: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -89,6 +93,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [billingRecords, setBillingRecords] = useState<BillingRecord[]>([]);
   const [deliveryPackages, setDeliveryPackages] = useState<DeliveryPackage[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   
   // DEFAULT WORKING HOURS OFF
   const [settings, setSettings] = useState<GlobalSettings>({ 
@@ -96,7 +101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isWorkingHoursActive: false 
   });
 
-  // Initial Log
+  // Initial Log & Permission Request
   useEffect(() => {
     if (auditLogs.length === 0) {
       setAuditLogs([{
@@ -108,6 +113,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         details: 'System initialized.',
         status: 'RESOLVED'
       }]);
+    }
+
+    // Request Notification Permission
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -128,6 +138,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
   }, [settings.isWorkingHoursActive, currentUser]);
+
+  const addNotification = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
+    const newNotification: AppNotification = {
+      id: Math.random().toString(36).substr(2, 9),
+      title,
+      message,
+      type,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+    setNotifications(prev => [newNotification, ...prev]);
+
+    // Browser Notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body: message });
+    }
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+    }, 5000);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
 
   const getPurityFactor = (purity: string): number => {
     const p = purity.toLowerCase();
@@ -163,6 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ? { ...log, status: 'RESOLVED', resolvedAt: new Date().toISOString() } 
         : log
     ));
+    addNotification('Incident Resolved', 'Security concern has been marked as resolved.', 'success');
   };
 
   const login = (email: string, deviceInfo: string, passwordInput: string = 'password123') => {
@@ -307,6 +344,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUsers(prev => [...prev, newUser]);
     setCustomers(prev => [...prev, newCustomer]);
     logAction('CUSTOMER_ADDED', `Super Admin manually added customer: ${name}. Default password set to '1234'.`);
+    addNotification('Customer Added', `${name} has been added to the registry.`, 'success');
   };
 
   const verifyUser = (userId: string) => {
@@ -314,6 +352,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomers(prev => prev.map(c => c.id === userId ? { ...c, status: 'ACTIVE' } : c));
     const user = users.find(u => u.id === userId);
     logAction('USER_VERIFIED', `User ${user?.name} (${user?.role}) approved by Super Admin`);
+    addNotification('User Verified', `${user?.name} is now active.`, 'success');
   };
 
   const deleteUser = (userId: string) => {
@@ -323,6 +362,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCustomers(prev => prev.filter(c => c.id !== userId));
     }
     logAction('USER_REMOVED', `User ${user?.name} removed by Super Admin`);
+    addNotification('User Removed', `${user?.name} has been deleted.`, 'warning');
   };
 
   const transferAdminData = (oldAdminId: string, newAdminId: string) => {
@@ -344,6 +384,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addProduct = (product: Product) => {
     setProducts(prev => [product, ...prev]);
     logAction('STOCK_INTAKE', `Added product Barcode: ${product.barcodeId}, Weight: ${product.goldWeight}g`);
+    addNotification('Stock Added', `Product ${product.barcodeId} added to inventory.`, 'success');
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
@@ -353,6 +394,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const allotProduct = (productId: string, customerId: string, adminName: string) => {
     updateProduct(productId, { status: ProductStatus.ALLOTTED, customerId, allottedBy: adminName, doubleVerifiedAllotment: false });
     logAction('ALLOTMENT_INIT', `Product ${productId} allotted to Customer ${customerId} by ${adminName}`);
+    addNotification('Product Allotted', `Item allotted to customer. Pending verification.`, 'info');
   };
 
   const bulkAllotProducts = (productIds: string[], customerId: string, adminName: string) => {
@@ -368,6 +410,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const verifyAllotment = (productId: string) => {
     updateProduct(productId, { doubleVerifiedAllotment: true });
     logAction('ALLOTMENT_VERIFY', `Double verification complete for Product ${productId}`);
+    addNotification('Allotment Verified', `Double verification successful for ${productId}.`, 'success');
   };
 
   const customerConfirmProduct = (productId: string, match: boolean) => {
@@ -376,9 +419,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (prod && prod.customerId) {
         updateProduct(productId, { status: ProductStatus.CONFIRMED_BY_CUSTOMER });
         logAction('CUSTOMER_MATCH', `Customer confirmed product ${productId}. Ready for billing.`);
+        addNotification('Customer Confirmed', `Product ${productId} confirmed by customer.`, 'success');
       }
     } else {
       logAction('CUSTOMER_MISMATCH', `CRITICAL: Customer reported mismatch on product ${productId}`);
+      addNotification('Mismatch Reported', `Customer reported issue with product ${productId}!`, 'error');
     }
   };
 
@@ -389,6 +434,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts(prev => prev.map(p => itemIds.includes(p.id) ? { ...p, status: ProductStatus.BILLED } : p));
     
     logAction('BILLING_CREATE', `Bill Generated for ${record.items.length} items. Fine Gold: ${record.totalFineGoldWeight.toFixed(2)}g, Total: ₹${record.grandTotal}`);
+    addNotification('Bill Generated', `Invoice created for ₹${record.grandTotal.toLocaleString()}`, 'success');
   };
 
   const settleBillPayment = (billId: string, mode: 'UPI' | 'RTGS' | 'CHEQUE' | 'CASH' | 'OTHER') => {
@@ -406,12 +452,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
            const itemIds = updated.items.map(i => i.productId);
            setProducts(currentProds => currentProds.map(p => itemIds.includes(p.id) ? { ...p, status: ProductStatus.COMPLETED } : p));
            logAction('TRANSACTION_COMPLETE', `Bill ${billId} Fully Settled`);
+           addNotification('Transaction Complete', `Bill ${billId} fully settled.`, 'success');
         }
         return updated;
       }
       return b;
     }));
     logAction('PAYMENT_RECEIVED', `Payment received via ${mode} for Bill ${billId}`);
+    addNotification('Payment Received', `Received payment via ${mode}`, 'info');
   };
 
   const toggleBillGold = (billId: string) => {
@@ -425,6 +473,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
            const itemIds = updated.items.map(i => i.productId);
            setProducts(currentProds => currentProds.map(p => itemIds.includes(p.id) ? { ...p, status: ProductStatus.COMPLETED } : p));
            logAction('TRANSACTION_COMPLETE', `Bill ${billId} Fully Settled`);
+           addNotification('Transaction Complete', `Bill ${billId} fully settled.`, 'success');
         }
         return updated;
       }
@@ -435,16 +484,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateGoldRate = (rate: number) => {
     setSettings({ ...settings, goldRatePer10Gm: rate });
     logAction('RATE_UPDATE', `Gold rate updated to ${rate}`);
+    addNotification('Gold Rate Updated', `New rate: ₹${rate}`, 'info');
   };
 
   const bulkUpdateProductStatus = (productIds: string[], status: ProductStatus) => {
     setProducts(prev => prev.map(p => productIds.includes(p.id) ? { ...p, status } : p));
     logAction('BULK_STATUS_CHANGE', `Super Admin moved ${productIds.length} items to ${status}`);
+    addNotification('Bulk Status Update', `${productIds.length} items updated to ${status}.`, 'info');
   };
 
   const injectProduct = (product: Product) => {
     setProducts(prev => [product, ...prev]);
     logAction('WORK_INJECTION', `Super Admin injected task: ${product.barcodeId}`);
+    addNotification('Work Injected', `Task ${product.barcodeId} assigned.`, 'info');
   };
 
   const dispatchPackage = (billId: string, productIds: string[]) => {
@@ -467,6 +519,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProducts(prev => prev.map(p => productIds.includes(p.id) ? { ...p, status: ProductStatus.DISPATCHED } : p));
       
       logAction('PACKAGE_DISPATCH', `Generated Group QR ${groupQrId} for Bill ${billId}. Items dispatched.`);
+      addNotification('Package Dispatched', `Package ${groupQrId} is on the way.`, 'info');
     }
   };
 
@@ -482,6 +535,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProducts(prev => prev.map(p => pkg.productIds.includes(p.id) ? { ...p, status: ProductStatus.DELIVERED } : p));
     
     logAction('PACKAGE_DELIVERED', `Package ${packageQrId} confirmed delivered.`);
+    addNotification('Package Delivered', `Package ${packageQrId} has been delivered.`, 'success');
     return { success: true };
   };
 
@@ -504,6 +558,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
        // Log the threat to Security Center
        logAction('SECURITY_ALERT', `UNAUTHORIZED ACCESS: ${user.name} (${user.role}) attempted login during closed hours. Attempt #${newCount}. Device: ${deviceInfo}`);
+       addNotification('Security Alert', `Unauthorized access attempt by ${user.name}`, 'error');
     }
   };
 
@@ -517,6 +572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       billingRecords,
       deliveryPackages,
       settings,
+      notifications,
       login,
       logout,
       changePassword,
@@ -544,7 +600,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliverPackage,
       toggleWorkingHours,
       recordUnauthorizedAttempt,
-      getPurityFactor
+      getPurityFactor,
+      addNotification,
+      removeNotification
     }}>
       {children}
     </AppContext.Provider>
