@@ -152,7 +152,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Browser Notification
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body: message });
+      new Notification(`Aurum Enterprise: ${title}`, { body: message });
     }
 
     // Auto-dismiss after 5 seconds

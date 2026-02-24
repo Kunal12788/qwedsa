@@ -1,5 +1,5 @@
 {
-  "name": "Remix: Aurum Enterprise 14",
+  "name": "Aurum Enterprise main",
   "description": "An enterprise-grade jewellery inventory and management system featuring role-based access, inventory integrity, and secure transactions.",
   "requestFramePermissions": [
     "camera"
