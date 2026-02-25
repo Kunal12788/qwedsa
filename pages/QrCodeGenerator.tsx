@@ -26,31 +26,69 @@ export const QrCodeGenerator: React.FC = () => {
   const [showPdfPreview, setShowPdfPreview] = useState(false);
 
   // --- PDF GENERATION LOGIC ---
-  const handleDownloadPDF = () => {
-    const element = document.getElementById('print-container');
-    if (!element) return;
+  const handleDownloadPDF = async () => {
+    const originalElement = document.getElementById('print-container');
+    if (!originalElement) return;
+
+    // Clone the element to ensure it's captured fully without scrollbars or modal constraints
+    const clone = originalElement.cloneNode(true) as HTMLElement;
+    
+    // Set explicit A4 pixel dimensions (at 96 DPI) to ensure consistent rendering across devices
+    // A4 is 210mm x 297mm. At 96 DPI: 793.7px x 1122.5px
+    const A4_WIDTH_PX = 794;
+    const A4_HEIGHT_PX = 1123;
+
+    clone.id = 'print-container-clone';
+    clone.style.position = 'fixed';
+    clone.style.top = '0';
+    clone.style.left = '0';
+    clone.style.width = `${A4_WIDTH_PX}px`;
+    clone.style.height = `${A4_HEIGHT_PX}px`;
+    clone.style.zIndex = '99999';
+    clone.style.background = 'white';
+    clone.style.margin = '0';
+    clone.style.padding = '5mm'; // Ensure padding matches the original
+    clone.style.overflow = 'hidden';
+    clone.style.pointerEvents = 'none';
+    
+    // Append to body
+    document.body.appendChild(clone);
 
     // @ts-ignore
     const opt = {
       margin: 0,
       filename: `Aurum_Tags_${new Date().toISOString().slice(0, 10)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
+      image: { type: 'jpeg', quality: 1.0 },
       html2canvas: { 
-        scale: 2, 
+        scale: 2, // Higher scale for better quality
         useCORS: true, 
         logging: false,
-        windowWidth: 794,
-        windowHeight: 1123
+        width: A4_WIDTH_PX,
+        height: A4_HEIGHT_PX,
+        windowWidth: A4_WIDTH_PX,
+        windowHeight: A4_HEIGHT_PX,
+        scrollY: 0,
+        scrollX: 0
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // @ts-ignore
-    window.html2pdf().set(opt).from(element).save().then(() => {
+    try {
+      // @ts-ignore
+      await window.html2pdf().set(opt).from(clone).save();
+      
       setShowPdfPreview(false);
       saveBatchToHistory();
       addNotification('PDF Exported', 'Labels generated and batch saved to history.', 'success');
-    });
+    } catch (error) {
+      console.error('PDF Export Error:', error);
+      addNotification('Export Failed', 'Could not generate PDF.', 'error');
+    } finally {
+      // Cleanup
+      if (document.body.contains(clone)) {
+        document.body.removeChild(clone);
+      }
+    }
   };
 
   const handleExportPDF = () => {
