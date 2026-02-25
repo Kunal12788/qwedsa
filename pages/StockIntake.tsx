@@ -252,48 +252,88 @@ export const StockIntake: React.FC = () => {
 
   const handleScannerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const code = scannerInput.trim();
-    if (!code) return;
+    const rawInput = scannerInput.trim();
+    if (!rawInput) return;
 
     if (batchRows.length >= 20) {
       setGlobalError('Maximum batch size of 20 items reached.');
       return;
     }
 
+    // Try to parse Smart QR JSON
+    let qrId = rawInput;
+    let smartData: any = null;
+
+    try {
+      // Attempt to parse JSON if it looks like an object
+      if (rawInput.startsWith('{') && rawInput.endsWith('}')) {
+        const parsed = JSON.parse(rawInput);
+        if (parsed.id) {
+           smartData = parsed;
+           qrId = parsed.id;
+        }
+      }
+    } catch (err) {
+      // Not JSON, proceed as raw ID
+      console.log('Scanned non-JSON ID:', rawInput);
+    }
+
     // Check Duplicate in Batch
-    if (batchRows.some(r => r.qrCodeId === code)) {
-        setGlobalError(`Batch Duplicate: Item "${code}" is already in the current list.`);
+    if (batchRows.some(r => r.qrCodeId === qrId)) {
+        setGlobalError(`Batch Duplicate: Item "${qrId}" is already in the current list.`);
         setScannerInput('');
         return;
     }
 
     // Check Duplicate in System (The Complaint Trigger)
-    const exists = products.find(p => p.barcodeId === code);
+    const exists = products.find(p => p.barcodeId === qrId);
     if (exists) {
         // Log the security incident details
         const incidentDetails = `DUPLICATE SCAN ATTEMPT: Admin '${currentUser?.name}' tried to re-scan existing Asset ID: ${exists.barcodeId}. Type: ${exists.type}, Weight: ${exists.goldWeight}g, Purity: ${exists.purity}. Status: ${exists.status}.`;
         
         logAction('SECURITY_ALERT', incidentDetails);
 
-        setGlobalError(`SECURITY ALERT: Asset "${code}" already exists! Incident logged to Super Admin.`);
+        setGlobalError(`SECURITY ALERT: Asset "${qrId}" already exists! Incident logged to Super Admin.`);
         setScannerInput('');
         return;
     }
 
-    // Simulate Data Fetching/Decoding from QR
-    const randomCategory = JEWELLERY_TYPES[Math.floor(Math.random() * JEWELLERY_TYPES.length)];
-    const randomWeight = (Math.random() * 20 + 5).toFixed(2);
-    const randomStone = (Math.random() * 2).toFixed(2);
-    const randomImg = `https://picsum.photos/400/400?random=${Math.random()}`;
+    // Determine Data Source (Smart QR vs Mock/Manual)
+    let category = JEWELLERY_TYPES[0];
+    let purity = PURITY_TYPES[1]; // Default 22k
+    let goldWeight = '0.00';
+    let stoneWeight = '0.00';
+    let scannedImage = `https://picsum.photos/400/400?random=${Math.random()}`;
+
+    if (smartData) {
+       // Map Smart QR Data (t=type, p=purity, w=gross, n=net)
+       // Note: The generator sends: id, t(type), w(gross), p(purity), n(net)
+       // We need to derive stone weight: Gross - Net
+       category = smartData.t || category;
+       purity = smartData.p || purity;
+       
+       const gross = parseFloat(smartData.w) || 0;
+       const net = parseFloat(smartData.n) || 0;
+       
+       goldWeight = net.toFixed(2);
+       stoneWeight = (gross - net).toFixed(2);
+       
+       addNotification('Smart QR Detected', `Decoded ${category} (${purity})`, 'success');
+    } else {
+       // Simulate Data Fetching/Decoding from Legacy QR
+       category = JEWELLERY_TYPES[Math.floor(Math.random() * JEWELLERY_TYPES.length)];
+       goldWeight = (Math.random() * 20 + 5).toFixed(2);
+       stoneWeight = (Math.random() * 2).toFixed(2);
+    }
 
     const newRow: BatchRow = {
       tempId: Math.random().toString(36),
-      qrCodeId: code,
-      category: randomCategory,
-      purity: PURITY_TYPES[1], // Default 22k
-      goldWeight: randomWeight,
-      stoneWeight: randomStone,
-      scannedImage: randomImg,
+      qrCodeId: qrId,
+      category,
+      purity,
+      goldWeight,
+      stoneWeight,
+      scannedImage,
       isScanned: true
     };
 

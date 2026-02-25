@@ -8,6 +8,9 @@ export const MOCK_USERS: User[] = [
   { id: 'u4', name: 'Grace Delivery', email: 'delivery@aurum.com', role: UserRole.DELIVERY_ADMIN, verified: true, joinedAt: new Date().toISOString() }, 
   { id: 'u5', name: 'Eve Super', email: 'super@aurum.com', role: UserRole.SUPER_ADMIN, verified: true, joinedAt: new Date().toISOString() },
   { id: 'u6', name: 'Frank Customer', email: 'cust@gmail.com', role: UserRole.CUSTOMER, verified: true, joinedAt: new Date().toISOString() },
+  { id: 'u7', name: 'Quinn QR', email: 'qr@aurum.com', role: UserRole.QR_MANAGER, verified: true, joinedAt: new Date().toISOString() },
+  { id: 'u8', name: 'Tanya Entry', email: 'entry@aurum.com', role: UserRole.TAG_ENTRY_ADMIN, verified: true, joinedAt: new Date().toISOString() },
+  { id: 'u9', name: 'Frank Finalizer', email: 'final@aurum.com', role: UserRole.TAG_FINALIZER_ADMIN, verified: true, joinedAt: new Date().toISOString() },
 ];
 
 export const MOCK_CUSTOMERS: Customer[] = [

@@ -15,7 +15,8 @@ import {
   Landmark,
   Contact,
   Truck,
-  ShieldAlert
+  ShieldAlert,
+  QrCode
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -85,10 +86,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           { label: 'Workforce Ops', icon: Briefcase, hash: '#workforce' },
           { label: 'Master Analytics', icon: PieChart, hash: '#analytics' },
           { label: 'Stock Intake', icon: PackagePlus, hash: '#stock-intake' },
+          { label: 'Tag Manager', icon: QrCode, hash: '#qr-generator' }, // New Item
           { label: 'Allotment', icon: UserCheck, hash: '#allotment' },
           { label: 'Billing', icon: Receipt, hash: '#billing' },
           { label: 'Delivery', icon: Truck, hash: '#delivery' },
         ];
+      case UserRole.QR_MANAGER:
+        return [{ label: 'Tag Manager', icon: QrCode, hash: '#qr-generator' }];
+      case UserRole.TAG_ENTRY_ADMIN:
+        return [{ label: 'Tag Manager', icon: QrCode, hash: '#qr-generator' }];
+      case UserRole.TAG_FINALIZER_ADMIN:
+        return [{ label: 'Tag Manager', icon: QrCode, hash: '#qr-generator' }];
       case UserRole.STOCK_INTAKE_ADMIN:
         return [{ label: 'Stock Intake', icon: PackagePlus, hash: '#stock-intake' }];
       case UserRole.ALLOTMENT_ADMIN:

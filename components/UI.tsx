@@ -59,15 +59,17 @@ export const Button: React.FC<ButtonProps> = ({ children, variant = 'primary', s
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  helperText?: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, error, className = '', ...props }) => (
+export const Input: React.FC<InputProps> = ({ label, error, helperText, className = '', ...props }) => (
   <div className="flex flex-col gap-2 w-full">
     {label && <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">{label}</label>}
     <input
       className={`bg-white border ${error ? 'border-red-500 ring-1 ring-red-500/20' : 'border-slate-200 focus:border-indigo-500'} text-slate-900 rounded-xl px-4 py-3 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400 shadow-sm ${className}`}
       {...props}
     />
+    {helperText && !error && <span className="text-xs text-slate-400 font-medium ml-1">{helperText}</span>}
     {error && <span className="text-xs text-red-500 font-medium ml-1 animate-pulse">{error}</span>}
   </div>
 );

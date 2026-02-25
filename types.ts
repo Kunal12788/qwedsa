@@ -5,7 +5,24 @@ export enum UserRole {
   BILLING_ADMIN = 'BILLING_ADMIN', // 3rd Admin (Now handles Gold Collection too)
   DELIVERY_ADMIN = 'DELIVERY_ADMIN', // 4th Admin (Logistics)
   SUPER_ADMIN = 'SUPER_ADMIN', // Main Admin
-  CUSTOMER = 'CUSTOMER'
+  CUSTOMER = 'CUSTOMER',
+  QR_MANAGER = 'QR_MANAGER', // Deprecated, keeping for backward compatibility if needed, but we will use specific roles
+  TAG_ENTRY_ADMIN = 'TAG_ENTRY_ADMIN', // 1st Tag Admin: Enters Gold Weight & Details
+  TAG_FINALIZER_ADMIN = 'TAG_FINALIZER_ADMIN' // 2nd Tag Admin: Enters Total Weight & Finalizes
+}
+
+export interface TagItem {
+  id: string;
+  type: string;
+  purity: string;
+  goldWeight: number; // Net Weight (Entered by 1st Admin)
+  totalWeight: number; // Gross Weight (Entered by 2nd Admin)
+  stoneWeight: number; // Calculated (Total - Gold)
+  fineWeight: number; // 24k Equivalent
+  status: 'DRAFT' | 'FINALIZED';
+  createdBy: string;
+  finalizedBy?: string;
+  timestamp: string;
 }
 
 export enum ProductStatus {

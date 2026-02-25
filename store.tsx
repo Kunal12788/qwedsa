@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, Product, Customer, AuditLog, BillingRecord, GlobalSettings, UserRole, ProductStatus, DeliveryPackage, AppNotification } from './types';
+import { User, Product, Customer, AuditLog, BillingRecord, GlobalSettings, UserRole, ProductStatus, DeliveryPackage, AppNotification, TagItem } from './types';
 import { MOCK_USERS, MOCK_CUSTOMERS, INITIAL_PRODUCTS } from './constants';
 
 interface AppState {
@@ -12,6 +12,9 @@ interface AppState {
   deliveryPackages: DeliveryPackage[];
   settings: GlobalSettings;
   notifications: AppNotification[];
+  tagBatch: TagItem[]; // Finalized tags ready for print
+  draftTags: TagItem[]; // Draft tags from Entry Admin
+  generatedTagsHistory: TagItem[];
 }
 
 interface CustomerRegistrationData {
@@ -56,6 +59,13 @@ interface AppContextType extends AppState {
   // Notifications
   addNotification: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   removeNotification: (id: string) => void;
+  // Tag Management
+  createDraftTag: (tag: TagItem) => void;
+  finalizeTag: (id: string, totalWeight: number) => void;
+  addToBatch: (tag: TagItem) => void; // Deprecated/Legacy direct add
+  removeFromBatch: (id: string) => void;
+  clearBatch: () => void;
+  saveBatchToHistory: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -94,12 +104,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [billingRecords, setBillingRecords] = useState<BillingRecord[]>([]);
   const [deliveryPackages, setDeliveryPackages] = useState<DeliveryPackage[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [tagBatch, setTagBatch] = useState<TagItem[]>([]);
+  const [draftTags, setDraftTags] = useState<TagItem[]>([]);
+  const [generatedTagsHistory, setGeneratedTagsHistory] = useState<TagItem[]>([]);
   
   // DEFAULT WORKING HOURS OFF
   const [settings, setSettings] = useState<GlobalSettings>({ 
     goldRatePer10Gm: 72000,
     isWorkingHoursActive: false 
   });
+
+  // ... (existing effects)
+
+  // ... (existing actions)
 
   // Initial Log & Permission Request
   useEffect(() => {
@@ -152,7 +169,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Browser Notification
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(`Aurum Enterprise: ${title}`, { body: message });
+      new Notification('Aurum Enterprise', { 
+        body: `${title}: ${message}`
+      });
     }
 
     // Auto-dismiss after 5 seconds
@@ -562,6 +581,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const createDraftTag = (tag: TagItem) => {
+    setDraftTags(prev => [...prev, tag]);
+    addNotification('Draft Saved', `Tag ${tag.id} saved for finalization.`, 'info');
+  };
+
+  const finalizeTag = (id: string, totalWeight: number) => {
+    setDraftTags(prev => {
+      const tag = prev.find(t => t.id === id);
+      if (tag) {
+        const stoneWeight = totalWeight - tag.goldWeight;
+        const finalizedTag: TagItem = {
+          ...tag,
+          totalWeight,
+          stoneWeight,
+          status: 'FINALIZED',
+          finalizedBy: currentUser?.name || 'Unknown'
+        };
+        setTagBatch(currentBatch => [...currentBatch, finalizedTag]);
+        addNotification('Tag Finalized', `Tag ${id} ready for print.`, 'success');
+        return prev.filter(t => t.id !== id);
+      }
+      return prev;
+    });
+  };
+
+  const addToBatch = (tag: TagItem) => {
+    setTagBatch(prev => [...prev, tag]);
+    addNotification('Tag Added', `Added ${tag.type} to batch.`, 'success');
+  };
+
+  const removeFromBatch = (id: string) => {
+    setTagBatch(prev => prev.filter(t => t.id !== id));
+  };
+
+  const clearBatch = () => {
+    setTagBatch([]);
+  };
+
+  const saveBatchToHistory = () => {
+    setGeneratedTagsHistory(prev => [...prev, ...tagBatch]);
+    logAction('TAG_GENERATION', `Generated ${tagBatch.length} new QR tags.`);
+    clearBatch();
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -573,6 +636,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliveryPackages,
       settings,
       notifications,
+      tagBatch,
+      draftTags,
+      generatedTagsHistory,
       login,
       logout,
       changePassword,
@@ -602,7 +668,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       recordUnauthorizedAttempt,
       getPurityFactor,
       addNotification,
-      removeNotification
+      removeNotification,
+      createDraftTag,
+      finalizeTag,
+      addToBatch,
+      removeFromBatch,
+      clearBatch,
+      saveBatchToHistory
     }}>
       {children}
     </AppContext.Provider>

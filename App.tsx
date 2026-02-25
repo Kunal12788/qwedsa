@@ -12,9 +12,10 @@ import { AdminAnalytics } from './pages/AdminAnalytics';
 import { BusinessLedger } from './pages/BusinessLedger';
 import { CustomerManagement } from './pages/CustomerManagement';
 import { DeliveryManagement } from './pages/DeliveryManagement';
-import { SecurityCenter } from './pages/SecurityCenter'; // New Import
+import { SecurityCenter } from './pages/SecurityCenter';
+import { QrCodeGenerator } from './pages/QrCodeGenerator'; // New Import
 import { UserRole } from './types';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { Gem, ShieldCheck, Activity, Globe, Server, Lock } from 'lucide-react';
 import { NotificationSystem } from './components/NotificationSystem';
 
@@ -26,7 +27,7 @@ const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
     return () => clearTimeout(timer);
   }, [onComplete]);
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -43,7 +44,7 @@ const SplashScreen: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
     }
   };
 
-  const itemVariants = {
+  const itemVariants: Variants = {
     hidden: { y: 20, opacity: 0 },
     visible: { 
       y: 0, 
@@ -171,6 +172,8 @@ const AppContent: React.FC = () => {
         return (currentUser?.role === UserRole.BILLING_ADMIN || currentUser?.role === UserRole.SUPER_ADMIN) ? <Billing /> : <div className="text-slate-400">Access Denied</div>;
       case 'delivery':
         return (currentUser?.role === UserRole.DELIVERY_ADMIN || currentUser?.role === UserRole.SUPER_ADMIN) ? <DeliveryManagement /> : <div className="text-slate-400">Access Denied</div>;
+      case 'qr-generator':
+        return (currentUser?.role === UserRole.QR_MANAGER || currentUser?.role === UserRole.TAG_ENTRY_ADMIN || currentUser?.role === UserRole.TAG_FINALIZER_ADMIN || currentUser?.role === UserRole.SUPER_ADMIN) ? <QrCodeGenerator /> : <div className="text-slate-400">Access Denied</div>;
       case 'customer-portal':
         return currentUser?.role === UserRole.CUSTOMER ? <CustomerPortal /> : <div className="text-slate-400">Access Denied</div>;
       default:
@@ -180,6 +183,9 @@ const AppContent: React.FC = () => {
         if (currentUser?.role === UserRole.ALLOTMENT_ADMIN) return <Allotment />;
         if (currentUser?.role === UserRole.BILLING_ADMIN) return <Billing />;
         if (currentUser?.role === UserRole.DELIVERY_ADMIN) return <DeliveryManagement />;
+        if (currentUser?.role === UserRole.QR_MANAGER) return <QrCodeGenerator />;
+        if (currentUser?.role === UserRole.TAG_ENTRY_ADMIN) return <QrCodeGenerator />;
+        if (currentUser?.role === UserRole.TAG_FINALIZER_ADMIN) return <QrCodeGenerator />;
         if (currentUser?.role === UserRole.CUSTOMER) return <CustomerPortal />;
         return <div className="text-white">Page not found</div>;
     }
