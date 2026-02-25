@@ -30,29 +30,46 @@ export const QrCodeGenerator: React.FC = () => {
     const originalElement = document.getElementById('print-container');
     if (!originalElement) return;
 
-    // Clone the element to ensure it's captured fully without scrollbars or modal constraints
+    // 1. Clone the element
     const clone = originalElement.cloneNode(true) as HTMLElement;
-    
-    // Set explicit A4 pixel dimensions (at 96 DPI) to ensure consistent rendering across devices
-    // A4 is 210mm x 297mm. At 96 DPI: 793.7px x 1122.5px
+
+    // 2. Set explicit A4 pixel dimensions (at 96 DPI)
     const A4_WIDTH_PX = 794;
     const A4_HEIGHT_PX = 1123;
 
+    // 3. Apply critical inline styles to ensure layout stability
+    // We use 'absolute' positioning off-screen to ensure it's rendered but not visible
+    // This prevents viewport/scroll issues while ensuring the element is "painted" by the browser
     clone.id = 'print-container-clone';
-    clone.style.position = 'fixed';
+    clone.style.position = 'absolute';
+    clone.style.left = '-9999px'; // Move off-screen
     clone.style.top = '0';
-    clone.style.left = '0';
     clone.style.width = `${A4_WIDTH_PX}px`;
     clone.style.height = `${A4_HEIGHT_PX}px`;
-    clone.style.zIndex = '99999';
+    clone.style.zIndex = '-1';
     clone.style.background = 'white';
     clone.style.margin = '0';
-    clone.style.padding = '5mm'; // Ensure padding matches the original
+    clone.style.padding = '5mm';
     clone.style.overflow = 'hidden';
-    clone.style.pointerEvents = 'none';
     
+    // Ensure grid layout is preserved explicitly via inline styles
+    // This protects against CSS loading latency in production
+    clone.style.display = 'grid';
+    clone.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
+    clone.style.alignContent = 'start';
+    clone.style.columnGap = '5mm';
+    clone.style.rowGap = '8mm';
+
     // Append to body
     document.body.appendChild(clone);
+
+    // 4. Small delay to allow layout thrashing/painting to settle
+    // This is critical for production environments where styles might take a frame to apply
+    await new Promise(resolve => setTimeout(resolve, 800));
+
+    // 5. Force scroll to top (just in case html2canvas uses viewport)
+    const scrollY = window.scrollY;
+    window.scrollTo(0, 0);
 
     // @ts-ignore
     const opt = {
@@ -60,7 +77,7 @@ export const QrCodeGenerator: React.FC = () => {
       filename: `Aurum_Tags_${new Date().toISOString().slice(0, 10)}.pdf`,
       image: { type: 'jpeg', quality: 1.0 },
       html2canvas: { 
-        scale: 2, // Higher scale for better quality
+        scale: 2, 
         useCORS: true, 
         logging: false,
         width: A4_WIDTH_PX,
@@ -68,7 +85,9 @@ export const QrCodeGenerator: React.FC = () => {
         windowWidth: A4_WIDTH_PX,
         windowHeight: A4_HEIGHT_PX,
         scrollY: 0,
-        scrollX: 0
+        scrollX: 0,
+        x: 0,
+        y: 0
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -88,6 +107,8 @@ export const QrCodeGenerator: React.FC = () => {
       if (document.body.contains(clone)) {
         document.body.removeChild(clone);
       }
+      // Restore scroll
+      window.scrollTo(0, scrollY);
     }
   };
 
