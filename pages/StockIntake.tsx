@@ -63,7 +63,7 @@ interface BatchRow {
 }
 
 export const StockIntake: React.FC = () => {
-  const { products, addProduct, getPurityFactor, logAction, currentUser, addNotification } = useAppStore();
+  const { products, addProduct, updateProduct, getPurityFactor, logAction, currentUser, addNotification } = useAppStore();
   
   // Workflow State: Start directly at 'BATCH'
   const [step, setStep] = useState<'BATCH' | 'SUMMARY'>('BATCH');
@@ -262,19 +262,16 @@ export const StockIntake: React.FC = () => {
 
     // Try to parse Smart QR JSON
     let qrId = rawInput;
-    let smartData: any = null;
-
+    
     try {
       // Attempt to parse JSON if it looks like an object
       if (rawInput.startsWith('{') && rawInput.endsWith('}')) {
         const parsed = JSON.parse(rawInput);
         if (parsed.id) {
-           smartData = parsed;
            qrId = parsed.id;
         }
       }
     } catch (err) {
-      // Not JSON, proceed as raw ID
       console.log('Scanned non-JSON ID:', rawInput);
     }
 
@@ -285,46 +282,27 @@ export const StockIntake: React.FC = () => {
         return;
     }
 
-    // Check Duplicate in System (The Complaint Trigger)
-    const exists = products.find(p => p.barcodeId === qrId);
-    if (exists) {
-        // Log the security incident details
-        const incidentDetails = `DUPLICATE SCAN ATTEMPT: Admin '${currentUser?.name}' tried to re-scan existing Asset ID: ${exists.barcodeId}. Type: ${exists.type}, Weight: ${exists.goldWeight}g, Purity: ${exists.purity}. Status: ${exists.status}.`;
-        
-        logAction('SECURITY_ALERT', incidentDetails);
+    // --- NEW WORKFLOW: VALIDATE AGAINST TAGGED PRODUCTS ---
+    const existingProduct = products.find(p => p.barcodeId === qrId);
 
-        setGlobalError(`SECURITY ALERT: Asset "${qrId}" already exists! Incident logged to Super Admin.`);
+    if (!existingProduct) {
+        setGlobalError(`INVALID TAG: Tag "${qrId}" not found. Please generate tag first.`);
         setScannerInput('');
         return;
     }
 
-    // Determine Data Source (Smart QR vs Mock/Manual)
-    let category = JEWELLERY_TYPES[0];
-    let purity = PURITY_TYPES[1]; // Default 22k
-    let goldWeight = '0.00';
-    let stoneWeight = '0.00';
-    let scannedImage = `https://picsum.photos/400/400?random=${Math.random()}`;
-
-    if (smartData) {
-       // Map Smart QR Data (t=type, p=purity, w=gross, n=net)
-       // Note: The generator sends: id, t(type), w(gross), p(purity), n(net)
-       // We need to derive stone weight: Gross - Net
-       category = smartData.t || category;
-       purity = smartData.p || purity;
-       
-       const gross = parseFloat(smartData.w) || 0;
-       const net = parseFloat(smartData.n) || 0;
-       
-       goldWeight = net.toFixed(2);
-       stoneWeight = (gross - net).toFixed(2);
-       
-       addNotification('Smart QR Detected', `Decoded ${category} (${purity})`, 'success');
-    } else {
-       // Simulate Data Fetching/Decoding from Legacy QR
-       category = JEWELLERY_TYPES[Math.floor(Math.random() * JEWELLERY_TYPES.length)];
-       goldWeight = (Math.random() * 20 + 5).toFixed(2);
-       stoneWeight = (Math.random() * 2).toFixed(2);
+    if (existingProduct.status !== ProductStatus.TAGGED) {
+        setGlobalError(`DUPLICATE SCAN: Item "${qrId}" is already in stock (Status: ${existingProduct.status}).`);
+        setScannerInput('');
+        return;
     }
+
+    // Valid Tag Found - Populate Data from System
+    const category = existingProduct.type;
+    const purity = existingProduct.purity;
+    const goldWeight = existingProduct.goldWeight.toFixed(2);
+    const stoneWeight = existingProduct.stoneWeight.toFixed(2);
+    const scannedImage = existingProduct.imageUrl;
 
     const newRow: BatchRow = {
       tempId: Math.random().toString(36),
@@ -340,6 +318,7 @@ export const StockIntake: React.FC = () => {
     setBatchRows(prev => [...prev, newRow]);
     setScannerInput('');
     setGlobalError('');
+    addNotification('Tag Verified', `Matched: ${category} (${qrId})`, 'success');
   };
 
   const removeRow = (tempId: string) => {
@@ -362,7 +341,6 @@ export const StockIntake: React.FC = () => {
         return;
     }
 
-    const validItems: any[] = [];
     const usedIds = new Set<string>();
 
     for (let i = 0; i < batchRows.length; i++) {
@@ -372,10 +350,6 @@ export const StockIntake: React.FC = () => {
         setGlobalError(`Row ${i + 1}: QR Code ID is missing.`);
         return;
       }
-      if (!row.goldWeight || parseFloat(row.goldWeight) <= 0) {
-        setGlobalError(`Row ${i + 1}: Invalid Gold Weight.`);
-        return;
-      }
 
       if (usedIds.has(row.qrCodeId)) {
         setGlobalError(`Row ${i + 1}: Duplicate ID "${row.qrCodeId}" in current batch.`);
@@ -383,34 +357,30 @@ export const StockIntake: React.FC = () => {
       }
       usedIds.add(row.qrCodeId);
 
+      // Verify it still exists and is TAGGED (in case of race conditions)
       const exists = products.find(p => p.barcodeId === row.qrCodeId);
-      if (exists) {
-        setGlobalError(`Row ${i + 1}: ID "${row.qrCodeId}" already exists in system.`);
+      if (!exists) {
+        setGlobalError(`Row ${i + 1}: Tag "${row.qrCodeId}" not found in system.`);
         return;
       }
-
-      const gw = parseFloat(row.goldWeight);
-      const sw = parseFloat(row.stoneWeight);
-
-      validItems.push({
-        id: Math.random().toString(36).substr(2, 9),
-        barcodeId: row.qrCodeId, 
-        type: row.category,
-        purity: row.purity,
-        goldWeight: gw,
-        stoneWeight: sw,
-        totalWeight: gw + sw,
-        otherMetalWeight: 0,
-        diamondWeight: 0,
-        imageUrl: row.scannedImage || `https://picsum.photos/400/400?random=${Math.random()}`,
-        status: ProductStatus.IN_ADMIN_STOCK,
-        createdAt: new Date().toISOString(),
-        createdBy: currentUser?.name || 'System', // Capture Creator
-        batchId: currentBatchId // Attach Unique Batch ID
-      });
+      if (exists.status !== ProductStatus.TAGGED) {
+        setGlobalError(`Row ${i + 1}: Tag "${row.qrCodeId}" has invalid status: ${exists.status}.`);
+        return;
+      }
     }
 
-    validItems.forEach(item => addProduct(item));
+    // Process Intake: Update Status to IN_ADMIN_STOCK
+    batchRows.forEach(row => {
+        updateProduct(row.qrCodeId, {
+            status: ProductStatus.IN_ADMIN_STOCK,
+            batchId: currentBatchId,
+            createdBy: currentUser?.name || 'Stock Admin', // Set Intake Admin as Creator of the Stock Record
+            createdAt: new Date().toISOString() // Set Intake Time
+        });
+    });
+
+    logAction('STOCK_INTAKE', `Batch ${currentBatchId}: Intaken ${batchRows.length} items.`);
+    addNotification('Stock Intake Successful', `${batchRows.length} items added to inventory.`, 'success');
     
     // Move to Summary Step
     setBatchRows([]);

@@ -7,24 +7,6 @@ import { Printer, Trash2, Plus, History, Layers, Tag, ArrowRight, CheckCircle, E
 import { JEWELLERY_TYPES, PURITY_TYPES } from '../constants';
 import { TagItem, UserRole } from '../types';
 
-// --- PDF GENERATION LOGIC ---
-const generatePDF = (elementId: string) => {
-  const element = document.getElementById(elementId);
-  if (!element) return;
-
-  // @ts-ignore
-  const opt = {
-    margin: 0,
-    filename: `Aurum_Tags_${new Date().toISOString().slice(0, 10)}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-
-  // @ts-ignore
-  window.html2pdf().set(opt).from(element).save();
-};
-
 export const QrCodeGenerator: React.FC = () => {
   const { 
     currentUser,
@@ -41,6 +23,40 @@ export const QrCodeGenerator: React.FC = () => {
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<'ENTRY' | 'FINALIZE' | 'BATCH' | 'HISTORY'>('ENTRY');
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+
+  // --- PDF GENERATION LOGIC ---
+  const handleDownloadPDF = () => {
+    const element = document.getElementById('print-container');
+    if (!element) return;
+
+    // @ts-ignore
+    const opt = {
+      margin: 0,
+      filename: `Aurum_Tags_${new Date().toISOString().slice(0, 10)}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { 
+        scale: 2, 
+        useCORS: true, 
+        logging: false,
+        windowWidth: 794,
+        windowHeight: 1123
+      },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    // @ts-ignore
+    window.html2pdf().set(opt).from(element).save().then(() => {
+      setShowPdfPreview(false);
+      saveBatchToHistory();
+      addNotification('PDF Exported', 'Labels generated and batch saved to history.', 'success');
+    });
+  };
+
+  const handleExportPDF = () => {
+    if (tagBatch.length === 0) return;
+    setShowPdfPreview(true);
+  };
 
   // Set initial tab based on role
   useEffect(() => {
@@ -109,12 +125,7 @@ export const QrCodeGenerator: React.FC = () => {
     setTotalWeightInput('');
   };
 
-  const handleExportPDF = () => {
-    if (tagBatch.length === 0) return;
-    generatePDF('print-container');
-    saveBatchToHistory();
-    addNotification('PDF Exported', 'Labels generated and batch saved to history.', 'success');
-  };
+  // const handleExportPDF = () => { ... } // Removed duplicate
 
   const canViewEntry = currentUser?.role === UserRole.TAG_ENTRY_ADMIN || currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.QR_MANAGER;
   const canViewFinalize = currentUser?.role === UserRole.TAG_FINALIZER_ADMIN || currentUser?.role === UserRole.SUPER_ADMIN || currentUser?.role === UserRole.QR_MANAGER;
@@ -381,58 +392,93 @@ export const QrCodeGenerator: React.FC = () => {
         </div>
       )}
 
-      {/* --- HIDDEN PRINT CONTAINER (A4 Layout) --- */}
-      <div id="print-container" className="fixed top-0 left-0 -z-50 bg-white w-[210mm] min-h-[297mm] p-[5mm] grid grid-cols-4 content-start gap-[2mm]">
-        {tagBatch.map((tag) => (
-          <div 
-            key={tag.id} 
-            className="w-[44mm] h-[53mm] border border-slate-200 rounded-lg overflow-hidden flex flex-col relative bg-white"
-            style={{ pageBreakInside: 'avoid' }}
-          >
-            {/* Header */}
-            <div className="bg-[#1e1b4b] text-white text-center py-1 text-[10px] font-bold uppercase tracking-wider">
-              {tag.type}
-            </div>
-
-            {/* Purity Badge */}
-            <div className="absolute top-8 right-1 bg-yellow-400 text-[#78350f] text-[8px] font-bold px-1.5 py-0.5 rounded shadow-sm z-10">
-              {tag.purity}
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 flex flex-col items-center justify-center p-1">
-              {/* QR Code */}
-              <div className="mb-1">
-                <QRCode 
-                  value={JSON.stringify({
-                    id: tag.id,
-                    t: tag.type,
-                    w: tag.totalWeight, // Gross
-                    p: tag.purity,
-                    n: tag.goldWeight // Net
-                  })} 
-                  size={64}
-                  level="M"
-                />
-              </div>
-
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 w-full text-[8px] gap-x-1 gap-y-0.5 text-center mt-1">
-                <div className="text-slate-500">Gross</div>
-                <div className="font-bold text-slate-900">{tag.totalWeight.toFixed(2)}g</div>
-                
-                <div className="text-slate-500">Net</div>
-                <div className="font-bold text-slate-900">{tag.goldWeight.toFixed(2)}g</div>
+      {/* --- PDF PREVIEW MODAL --- */}
+      {showPdfPreview && (
+        <div className="fixed inset-0 z-[9999] bg-slate-900/90 flex flex-col items-center justify-center p-4 overflow-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b flex justify-between items-center bg-slate-50 rounded-t-xl">
+              <h3 className="font-bold text-lg">Print Preview</h3>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowPdfPreview(false)}>Cancel</Button>
+                <Button variant="primary" onClick={handleDownloadPDF}>
+                  <Printer size={16} className="mr-2" /> Download PDF
+                </Button>
               </div>
             </div>
+            
+            <div className="flex-1 overflow-auto p-8 bg-slate-200 flex justify-center">
+              <div 
+                id="print-container" 
+                className="bg-white w-[210mm] min-h-[297mm] p-[5mm] grid grid-cols-4 content-start gap-x-[5mm] gap-y-[8mm] shadow-lg"
+              >
+                {tagBatch.map((tag) => (
+                  <div 
+                    key={tag.id} 
+                    className="w-[46mm] h-[50mm] bg-white rounded-lg border border-slate-200 flex flex-col relative overflow-hidden shadow-sm"
+                    style={{ pageBreakInside: 'avoid' }}
+                  >
+                    {/* Header */}
+                    <div className="bg-slate-900 h-[7mm] flex items-center justify-between px-2">
+                      <span className="text-[9px] font-bold text-white uppercase tracking-wider">{tag.type}</span>
+                      <span className="bg-yellow-500 text-slate-900 text-[8px] font-bold px-1.5 py-0.5 rounded-sm leading-none">{tag.purity}</span>
+                    </div>
 
-            {/* Footer */}
-            <div className="bg-slate-100 text-slate-600 text-center py-0.5 text-[7px] font-mono border-t border-slate-200">
-              {tag.id}
+                    {/* Content */}
+                    <div className="flex-1 flex flex-col px-2 pt-1.5 pb-1">
+                      
+                      {/* QR Code Area */}
+                      <div className="flex items-center justify-center mb-1.5">
+                        <div className="w-[20mm] h-[20mm]">
+                          <QRCode 
+                            value={JSON.stringify({
+                              id: tag.id,
+                              t: tag.type,
+                              w: tag.totalWeight,
+                              p: tag.purity,
+                              n: tag.goldWeight
+                            })} 
+                            size={256}
+                            style={{ height: "100%", width: "100%" }}
+                            viewBox={`0 0 256 256`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Data Grid */}
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 mt-auto">
+                        {/* Row 1 */}
+                        <div className="flex flex-col">
+                          <span className="text-[5px] uppercase text-slate-400 font-bold tracking-wider leading-none mb-0.5">Gross Weight</span>
+                          <span className="text-[9px] font-bold text-slate-900 leading-none">{tag.totalWeight.toFixed(2)}g</span>
+                        </div>
+                        <div className="flex flex-col items-end text-right">
+                          <span className="text-[5px] uppercase text-slate-400 font-bold tracking-wider leading-none mb-0.5">Net Gold</span>
+                          <span className="text-[9px] font-bold text-slate-900 leading-none">{tag.goldWeight.toFixed(2)}g</span>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div className="flex flex-col">
+                          <span className="text-[5px] uppercase text-slate-400 font-bold tracking-wider leading-none mb-0.5">Stone Weight</span>
+                          <span className="text-[9px] font-bold text-slate-900 leading-none">{tag.stoneWeight.toFixed(2)}g</span>
+                        </div>
+                        <div className="flex flex-col items-end text-right">
+                          <span className="text-[5px] uppercase text-slate-400 font-bold tracking-wider leading-none mb-0.5">24k Equiv</span>
+                          <span className="text-[9px] font-bold text-blue-600 leading-none">{tag.fineWeight.toFixed(2)}g</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer ID */}
+                    <div className="text-center pb-1 pt-0.5">
+                      <span className="text-[7px] font-mono text-slate-500 tracking-wider block">{tag.id}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

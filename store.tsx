@@ -620,6 +620,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const saveBatchToHistory = () => {
+    // Create Product records for each tag
+    const newProducts: Product[] = tagBatch.map(tag => ({
+      id: tag.id, // Use the Tag ID as the Product ID
+      barcodeId: tag.id, // Same
+      type: tag.type,
+      purity: tag.purity,
+      goldWeight: tag.goldWeight,
+      stoneWeight: tag.stoneWeight,
+      totalWeight: tag.totalWeight,
+      imageUrl: `https://picsum.photos/400/400?random=${Math.random()}`, // Placeholder
+      status: ProductStatus.TAGGED, // Initial Status
+      createdAt: tag.timestamp,
+      createdBy: tag.createdBy,
+      // batchId is not set yet, will be set during Stock Intake
+    }));
+
+    setProducts(prev => [...newProducts, ...prev]); // Add to main inventory as TAGGED
     setGeneratedTagsHistory(prev => [...prev, ...tagBatch]);
     logAction('TAG_GENERATION', `Generated ${tagBatch.length} new QR tags.`);
     clearBatch();
