@@ -25,91 +25,65 @@ export const QrCodeGenerator: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'ENTRY' | 'FINALIZE' | 'BATCH' | 'HISTORY'>('ENTRY');
   const [showPdfPreview, setShowPdfPreview] = useState(false);
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
   // --- PDF GENERATION LOGIC ---
-  const handleDownloadPDF = async () => {
-    const originalElement = document.getElementById('print-container');
-    if (!originalElement) return;
+  useEffect(() => {
+    if (isDownloading) {
+      const generatePdf = async () => {
+        // 1. Wait for React to render the export container
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // 1. Clone the element
-    const clone = originalElement.cloneNode(true) as HTMLElement;
+        const element = document.getElementById('pdf-export-container');
+        if (!element) {
+          setIsDownloading(false);
+          return;
+        }
 
-    // 2. Set explicit A4 pixel dimensions (at 96 DPI)
-    const A4_WIDTH_PX = 794;
-    const A4_HEIGHT_PX = 1123;
+        // 2. Configure PDF options
+        // @ts-ignore
+        const opt = {
+          margin: 0,
+          filename: `Aurum_Tags_${new Date().toISOString().slice(0, 10)}.pdf`,
+          image: { type: 'jpeg', quality: 1.0 },
+          html2canvas: { 
+            scale: 2, 
+            useCORS: true, 
+            logging: false,
+            width: 794, // A4 Width px
+            height: 1123, // A4 Height px
+            windowWidth: 794,
+            windowHeight: 1123,
+            scrollY: 0,
+            scrollX: 0,
+            x: 0,
+            y: 0
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
 
-    // 3. Apply critical inline styles to ensure layout stability
-    // We use 'absolute' positioning off-screen to ensure it's rendered but not visible
-    // This prevents viewport/scroll issues while ensuring the element is "painted" by the browser
-    clone.id = 'print-container-clone';
-    clone.style.position = 'absolute';
-    clone.style.left = '-9999px'; // Move off-screen
-    clone.style.top = '0';
-    clone.style.width = `${A4_WIDTH_PX}px`;
-    clone.style.height = `${A4_HEIGHT_PX}px`;
-    clone.style.zIndex = '-1';
-    clone.style.background = 'white';
-    clone.style.margin = '0';
-    clone.style.padding = '5mm';
-    clone.style.overflow = 'hidden';
-    
-    // Ensure grid layout is preserved explicitly via inline styles
-    // This protects against CSS loading latency in production
-    clone.style.display = 'grid';
-    clone.style.gridTemplateColumns = 'repeat(4, minmax(0, 1fr))';
-    clone.style.alignContent = 'start';
-    clone.style.columnGap = '5mm';
-    clone.style.rowGap = '8mm';
+        try {
+          // 3. Generate
+          // @ts-ignore
+          await window.html2pdf().set(opt).from(element).save();
+          
+          saveBatchToHistory();
+          addNotification('PDF Exported', 'Labels generated and batch saved to history.', 'success');
+          setShowPdfPreview(false);
+        } catch (error) {
+          console.error('PDF Export Error:', error);
+          addNotification('Export Failed', 'Could not generate PDF.', 'error');
+        } finally {
+          setIsDownloading(false);
+        }
+      };
 
-    // Append to body
-    document.body.appendChild(clone);
-
-    // 4. Small delay to allow layout thrashing/painting to settle
-    // This is critical for production environments where styles might take a frame to apply
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    // 5. Force scroll to top (just in case html2canvas uses viewport)
-    const scrollY = window.scrollY;
-    window.scrollTo(0, 0);
-
-    // @ts-ignore
-    const opt = {
-      margin: 0,
-      filename: `Aurum_Tags_${new Date().toISOString().slice(0, 10)}.pdf`,
-      image: { type: 'jpeg', quality: 1.0 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
-        logging: false,
-        width: A4_WIDTH_PX,
-        height: A4_HEIGHT_PX,
-        windowWidth: A4_WIDTH_PX,
-        windowHeight: A4_HEIGHT_PX,
-        scrollY: 0,
-        scrollX: 0,
-        x: 0,
-        y: 0
-      },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
-    try {
-      // @ts-ignore
-      await window.html2pdf().set(opt).from(clone).save();
-      
-      setShowPdfPreview(false);
-      saveBatchToHistory();
-      addNotification('PDF Exported', 'Labels generated and batch saved to history.', 'success');
-    } catch (error) {
-      console.error('PDF Export Error:', error);
-      addNotification('Export Failed', 'Could not generate PDF.', 'error');
-    } finally {
-      // Cleanup
-      if (document.body.contains(clone)) {
-        document.body.removeChild(clone);
-      }
-      // Restore scroll
-      window.scrollTo(0, scrollY);
+      generatePdf();
     }
+  }, [isDownloading]);
+
+  const handleDownloadPDF = () => {
+    setIsDownloading(true);
   };
 
   const handleExportPDF = () => {
@@ -459,8 +433,8 @@ export const QrCodeGenerator: React.FC = () => {
               <h3 className="font-bold text-lg">Print Preview</h3>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowPdfPreview(false)}>Cancel</Button>
-                <Button variant="primary" onClick={handleDownloadPDF}>
-                  <Printer size={16} className="mr-2" /> Download PDF
+                <Button variant="primary" onClick={handleDownloadPDF} disabled={isDownloading}>
+                  {isDownloading ? 'Generating...' : <><Printer size={16} className="mr-2" /> Download PDF</>}
                 </Button>
               </div>
             </div>
@@ -536,6 +510,127 @@ export const QrCodeGenerator: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- DEDICATED PDF EXPORT CONTAINER (Hidden from View, Visible to DOM) --- */}
+      {isDownloading && (
+        <div className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center">
+            <div className="text-center z-50">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900 mx-auto mb-4"></div>
+                <p className="text-slate-600 font-bold animate-pulse">Generating High-Quality PDF...</p>
+                <p className="text-xs text-slate-400 mt-2">Please wait while we render the labels.</p>
+            </div>
+            
+            {/* The Actual Container to Capture */}
+            <div 
+              id="pdf-export-container" 
+              style={{
+                 position: 'fixed',
+                 top: 0,
+                 left: 0,
+                 width: '794px', // A4 Width px
+                 height: '1123px', // A4 Height px
+                 background: 'white',
+                 zIndex: -1, // Behind the loading screen
+                 padding: '5mm',
+                 display: 'grid',
+                 gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                 alignContent: 'start',
+                 columnGap: '5mm',
+                 rowGap: '8mm',
+                 overflow: 'hidden'
+              }}
+            >
+                {tagBatch.map((tag) => (
+                  <div 
+                    key={tag.id} 
+                    style={{
+                        width: '46mm',
+                        height: '50mm',
+                        backgroundColor: 'white',
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0', // slate-200
+                        display: 'flex',
+                        flexDirection: 'column',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+                        pageBreakInside: 'avoid'
+                    }}
+                  >
+                    {/* Header */}
+                    <div style={{
+                        backgroundColor: '#0f172a', // slate-900
+                        height: '7mm',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingLeft: '8px',
+                        paddingRight: '8px'
+                    }}>
+                      <span style={{fontSize: '9px', fontWeight: 'bold', color: 'white', textTransform: 'uppercase', letterSpacing: '0.05em'}}>{tag.type}</span>
+                      <span style={{backgroundColor: '#eab308', color: '#0f172a', fontSize: '8px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '2px', lineHeight: 1}}>{tag.purity}</span>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{flex: 1, display: 'flex', flexDirection: 'column', padding: '8px 8px 4px 8px'}}>
+                      
+                      {/* QR Code Area */}
+                      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '6px'}}>
+                        <div style={{width: '20mm', height: '20mm'}}>
+                          <QRCode 
+                            value={JSON.stringify({
+                              id: tag.id,
+                              t: tag.type,
+                              w: tag.totalWeight,
+                              p: tag.purity,
+                              n: tag.goldWeight
+                            })} 
+                            size={256}
+                            style={{ height: "100%", width: "100%" }}
+                            viewBox={`0 0 256 256`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Data Grid */}
+                      <div style={{
+                          display: 'grid', 
+                          gridTemplateColumns: '1fr 1fr', 
+                          columnGap: '8px', 
+                          rowGap: '2px', 
+                          marginTop: 'auto'
+                      }}>
+                        {/* Row 1 */}
+                        <div style={{display: 'flex', flexDirection: 'column'}}>
+                          <span style={{fontSize: '5px', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '0.05em', marginBottom: '2px', lineHeight: 1}}>Gross Weight</span>
+                          <span style={{fontSize: '9px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1}}>{tag.totalWeight.toFixed(2)}g</span>
+                        </div>
+                        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right'}}>
+                          <span style={{fontSize: '5px', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '0.05em', marginBottom: '2px', lineHeight: 1}}>Net Gold</span>
+                          <span style={{fontSize: '9px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1}}>{tag.goldWeight.toFixed(2)}g</span>
+                        </div>
+
+                        {/* Row 2 */}
+                        <div style={{display: 'flex', flexDirection: 'column'}}>
+                          <span style={{fontSize: '5px', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '0.05em', marginBottom: '2px', lineHeight: 1}}>Stone Weight</span>
+                          <span style={{fontSize: '9px', fontWeight: 'bold', color: '#0f172a', lineHeight: 1}}>{tag.stoneWeight.toFixed(2)}g</span>
+                        </div>
+                        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right'}}>
+                          <span style={{fontSize: '5px', textTransform: 'uppercase', color: '#94a3b8', fontWeight: 'bold', letterSpacing: '0.05em', marginBottom: '2px', lineHeight: 1}}>24k Equiv</span>
+                          <span style={{fontSize: '9px', fontWeight: 'bold', color: '#2563eb', lineHeight: 1}}>{tag.fineWeight.toFixed(2)}g</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer ID */}
+                    <div style={{textAlign: 'center', paddingBottom: '4px', paddingTop: '2px'}}>
+                      <span style={{fontSize: '7px', fontFamily: 'monospace', color: '#64748b', letterSpacing: '0.05em', display: 'block'}}>{tag.id}</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
         </div>
       )}
     </div>
